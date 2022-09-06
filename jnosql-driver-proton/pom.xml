@@ -139,7 +139,7 @@
 			            <exclude>src/main/resources/**</exclude>
 					</excludes>
 					<properties>
-						<owner>Jakarta NoSQL Driver For Domino Via Proton Project</owner>
+						<owner>Jesse Gallagher</owner>
 						<copyrightYear>2022</copyrightYear>
 					</properties>
 				</configuration>

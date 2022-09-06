@@ -1,5 +1,5 @@
 /**
- * Copyright © 2022 Jakarta NoSQL Driver For Domino Via Proton Project
+ * Copyright © 2022 Jesse Gallagher
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,20 +15,27 @@
  */
 package org.openntf.xsp.nosql.communication.driver.proton.impl;
 
+import org.openntf.xsp.nosql.communication.driver.proton.AccessTokenSupplier;
 import org.openntf.xsp.nosql.communication.driver.proton.DatabaseSupplier;
 
+import jakarta.enterprise.inject.Instance;
 import jakarta.enterprise.inject.spi.CDI;
 import jakarta.nosql.Settings;
 import jakarta.nosql.document.DocumentConfiguration;
 
 public class ProtonDocumentConfiguration implements DocumentConfiguration {
 	public static final String SETTING_SUPPLIER = "databaseSupplier"; //$NON-NLS-1$
+	public static final String SETTING_TOKENSUPPLIER = "accessTokenSupplier"; //$NON-NLS-1$
 
 	@SuppressWarnings("unchecked")
 	@Override
 	public ProtonDocumentCollectionManagerFactory get() {
+		Instance<AccessTokenSupplier> tokenInstance = CDI.current().select(AccessTokenSupplier.class);
+		AccessTokenSupplier tokenSupplier = tokenInstance.isResolvable() ? tokenInstance.get() : () -> null;
+		
 		return new ProtonDocumentCollectionManagerFactory(
-			CDI.current().select(DatabaseSupplier.class).get()
+			CDI.current().select(DatabaseSupplier.class).get(),
+			tokenSupplier
 		);
 	}
 
@@ -38,7 +45,14 @@ public class ProtonDocumentConfiguration implements DocumentConfiguration {
 		DatabaseSupplier supplier = settings.get(SETTING_SUPPLIER)
 			.map(DatabaseSupplier.class::cast)
 			.orElseGet(() -> CDI.current().select(DatabaseSupplier.class).get());
-		return new ProtonDocumentCollectionManagerFactory(supplier);
+		AccessTokenSupplier tokenSupplier = settings.get(SETTING_TOKENSUPPLIER)
+			.map(AccessTokenSupplier.class::cast)
+			.orElseGet(() -> {
+				Instance<AccessTokenSupplier> tokenInstance = CDI.current().select(AccessTokenSupplier.class);
+				AccessTokenSupplier s = tokenInstance.isResolvable() ? tokenInstance.get() : () -> null;
+				return s;
+			});
+		return new ProtonDocumentCollectionManagerFactory(supplier, tokenSupplier);
 	}
 
 }

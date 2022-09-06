@@ -1,5 +1,5 @@
 /**
- * Copyright © 2022 Jakarta NoSQL Driver For Domino Via Proton Project
+ * Copyright © 2022 Jesse Gallagher
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,6 +15,7 @@
  */
 package org.openntf.xsp.nosql.communication.driver.proton.impl;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
@@ -34,6 +35,7 @@ import org.openntf.xsp.nosql.communication.driver.impl.DQL;
 import org.openntf.xsp.nosql.communication.driver.impl.QueryConverter;
 import org.openntf.xsp.nosql.communication.driver.impl.DQL.DQLTerm;
 import org.openntf.xsp.nosql.communication.driver.impl.QueryConverter.QueryConverterResult;
+import org.openntf.xsp.nosql.communication.driver.proton.AccessTokenSupplier;
 import org.openntf.xsp.nosql.communication.driver.proton.DatabaseSupplier;
 import org.openntf.xsp.nosql.mapping.extension.ViewQuery;
 
@@ -41,6 +43,8 @@ import com.hcl.domino.db.model.BulkOperationException;
 import com.hcl.domino.db.model.ComputeOptions;
 import com.hcl.domino.db.model.Database;
 import com.hcl.domino.db.model.Document;
+import com.hcl.domino.db.model.OptionalAccessToken;
+import com.hcl.domino.db.model.OptionalArg;
 import com.hcl.domino.db.model.OptionalCount;
 import com.hcl.domino.db.model.OptionalItemNames;
 import com.hcl.domino.db.model.OptionalStart;
@@ -56,10 +60,12 @@ import jakarta.nosql.mapping.Sorts;
 public class ProtonDocumentCollectionManager extends AbstractDominoDocumentCollectionManager {
 	
 	private final DatabaseSupplier supplier;
+	private final AccessTokenSupplier tokenSupplier;
 	private final ProtonEntityConverter entityConverter;
 	
-	public ProtonDocumentCollectionManager(DatabaseSupplier supplier) {
+	public ProtonDocumentCollectionManager(DatabaseSupplier supplier, AccessTokenSupplier tokenSupplier) {
 		this.supplier = supplier;
+		this.tokenSupplier = tokenSupplier;
 		this.entityConverter = new ProtonEntityConverter();
 	}
 
@@ -91,7 +97,7 @@ public class ProtonDocumentCollectionManager extends AbstractDominoDocumentColle
 		Database database = supplier.get();
 		try {
 			Document doc = entityConverter.convertNoSQLEntity(entity, true, mapping);
-			doc = database.createDocument(doc, new ComputeOptions(computeWithForm, true)).get();
+			doc = database.createDocument(doc, composeArgs(new ComputeOptions(computeWithForm, true))).get();
 			entity.add(jakarta.nosql.document.Document.of(DominoConstants.FIELD_ID, doc.getUnid()));
 			return entity;
 		} catch (Exception e) {
@@ -111,7 +117,7 @@ public class ProtonDocumentCollectionManager extends AbstractDominoDocumentColle
 			try {
 				Document doc = entityConverter.convertNoSQLEntity(entity, true, mapping);
 				DQLTerm dql = DQL.item("@Text(@DocumentUniqueID)").isEqualTo(maybeId.get().get(String.class)); //$NON-NLS-1$
-				doc = database.upsertDocument(dql.toString(), doc, new ComputeOptions(computeWithForm, true)).get();
+				doc = database.upsertDocument(dql.toString(), doc, composeArgs(new ComputeOptions(computeWithForm, true))).get();
 				return entity;
 			} catch (Exception e) {
 				throw new RuntimeException(e);
@@ -123,7 +129,7 @@ public class ProtonDocumentCollectionManager extends AbstractDominoDocumentColle
 	public boolean existsById(String unid) {
 		Database database = supplier.get();
 		try {
-			Document doc = database.readDocumentByUnid(unid, Collections.emptyList()).get();
+			Document doc = database.readDocumentByUnid(unid, Collections.emptyList(), composeArgs()).get();
 			return doc != null;
 		} catch (Exception e) {
 			throw new RuntimeException(e);
@@ -142,10 +148,13 @@ public class ProtonDocumentCollectionManager extends AbstractDominoDocumentColle
 		try {
 			List<String> itemNames = getItemNames(mapping);
 			
-			Document doc = database.readDocumentByUnid(id, itemNames).get();
+			Document doc = database.readDocumentByUnid(id, itemNames, composeArgs()).get();
 			
 			return entityConverter.convertDocuments(entityName, Arrays.asList(doc), mapping)
 				.findFirst();
+		} catch (BulkOperationException e) {
+			// Assume it doesn't exist
+			return Optional.empty();
 		} catch (Exception e) {
 			throw new RuntimeException(e);
 		}
@@ -169,11 +178,11 @@ public class ProtonDocumentCollectionManager extends AbstractDominoDocumentColle
 					.collect(Collectors.toSet());
 			}
 			if(unids != null && !unids.isEmpty()) {
-				database.deleteDocumentsByUnid((Set<String>)unids).get();
+				database.deleteDocumentsByUnid((Set<String>)unids, composeArgs()).get();
 			} else if(query.getCondition().isPresent()) {
 				// Then do it via DQL
 				DQLTerm dql = QueryConverter.getCondition(query.getCondition().get());
-				database.deleteDocuments(dql.toString()).get();
+				database.deleteDocuments(dql.toString(), composeArgs()).get();
 			}
 		} catch (BulkOperationException | InterruptedException | ExecutionException e) {
 			throw new RuntimeException(e);
@@ -204,9 +213,11 @@ public class ProtonDocumentCollectionManager extends AbstractDominoDocumentColle
 			
 			List<Document> docs = database.readDocuments(
 				queryResult.getStatement().toString(),
-				itemNamesArg,
-				startArg,
-				countArg
+				composeArgs(
+					itemNamesArg,
+					startArg,
+					countArg
+				)
 			).get();
 			
 			return entityConverter.convertDocuments(entityName, docs, mapping);
@@ -220,7 +231,7 @@ public class ProtonDocumentCollectionManager extends AbstractDominoDocumentColle
 		DQLTerm dql = DQL.item(DominoConstants.FIELD_NAME).isEqualTo(documentCollection);
 		Database database = supplier.get();
 		try {
-			return database.readDocuments(dql.toString()).get().size();
+			return database.readDocuments(dql.toString(), composeArgs()).get().size();
 		} catch (Exception e) {
 			throw new RuntimeException(e);
 		}
@@ -244,5 +255,20 @@ public class ProtonDocumentCollectionManager extends AbstractDominoDocumentColle
 			})
 			.filter(Objects::nonNull)
 			.collect(Collectors.toList());
+	}
+	
+	private OptionalArg[] composeArgs(OptionalArg... args) {
+		List<OptionalArg> result = new ArrayList<>();
+		
+		String token = tokenSupplier.get();
+		if(token != null && !token.isEmpty()) {
+			result.add(new OptionalAccessToken(token));
+		}
+		
+		if(args != null && args.length > 0) {
+			result.addAll(Arrays.asList(args));
+		}
+		
+		return result.toArray(new OptionalArg[result.size()]);
 	}
 }

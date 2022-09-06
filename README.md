@@ -23,9 +23,28 @@ This driver can be retrieved from OpenNTF's Maven repository:
 </dependencies>
 ```
 
+To provide access to the contextual database, create a CDI bean that supplies a `DatabaseSupplier` instance and, optionally, an `AccessTokenSupplier` instance. For example:
+
+```java
+@RequestScoped
+public class ContextDatabaseSupplier {
+	
+	@Produces
+	public DatabaseSupplier get() {
+		HttpServletRequest request = CDI.current().select(HttpServletRequest.class).get();
+		return () -> (Database)request.getAttribute("keySetByServletRequestListener");
+	}
+	
+	@Produces
+	public AccessTokenSupplier getAccessToken() {
+		return () -> /* Find the OIDC/IAM access token somehow, or return null/empty */;
+	}
+}
+```
+
 ## Implementation Notes
 
-Currently, this driver does not support rich text or Act-As-User operations.
+Currently, this driver does not support rich text.
 
 #### Upstream Limitations
 

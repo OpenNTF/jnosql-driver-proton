@@ -1,5 +1,5 @@
 /**
- * Copyright © 2022 Jakarta NoSQL Driver For Domino Via Proton Project
+ * Copyright © 2022 Jesse Gallagher
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,6 +15,7 @@
  */
 package org.openntf.xsp.nosql.communication.driver.proton.impl;
 
+import org.openntf.xsp.nosql.communication.driver.proton.AccessTokenSupplier;
 import org.openntf.xsp.nosql.communication.driver.proton.DatabaseSupplier;
 
 import jakarta.nosql.document.DocumentCollectionManagerFactory;
@@ -22,15 +23,17 @@ import jakarta.nosql.document.DocumentCollectionManagerFactory;
 public class ProtonDocumentCollectionManagerFactory implements DocumentCollectionManagerFactory {
 	
 	private final DatabaseSupplier supplier;
+	private final AccessTokenSupplier tokenSupplier;
 	
-	public ProtonDocumentCollectionManagerFactory(DatabaseSupplier supplier) {
+	public ProtonDocumentCollectionManagerFactory(DatabaseSupplier supplier, AccessTokenSupplier tokenSupplier) {
 		this.supplier = supplier;
+		this.tokenSupplier = tokenSupplier;
 	}
 
 	@SuppressWarnings("unchecked")
 	@Override
 	public ProtonDocumentCollectionManager get(String type) {
-		return new ProtonDocumentCollectionManager(supplier);
+		return new ProtonDocumentCollectionManager(supplier, tokenSupplier);
 	}
 
 	@Override
