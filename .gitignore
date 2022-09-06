@@ -1,0 +1,18 @@
+# Eclipse Stuff
+.project
+.classpath
+.settings/
+.factorypath
+
+.vscode/
+
+target/
+
+pom.xml.versionsBackup
+
+# Java crash leftovers
+Snap.*.trc
+jitdump.*.dmp
+javacore.*.txt
+
+.DS_Store
