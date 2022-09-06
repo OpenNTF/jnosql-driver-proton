@@ -1,7 +1,8 @@
 package org.openntf.xsp.nosql.communication.driver.proton.impl;
 
-import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -9,10 +10,12 @@ import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+import java.util.stream.StreamSupport;
 
 import org.eclipse.jnosql.mapping.reflection.ClassMapping;
 import org.openntf.xsp.nosql.communication.driver.DominoConstants;
 import org.openntf.xsp.nosql.communication.driver.impl.AbstractDominoDocumentCollectionManager;
+import org.openntf.xsp.nosql.communication.driver.impl.DQL;
 import org.openntf.xsp.nosql.communication.driver.impl.QueryConverter;
 import org.openntf.xsp.nosql.communication.driver.impl.DQL.DQLTerm;
 import org.openntf.xsp.nosql.communication.driver.impl.QueryConverter.QueryConverterResult;
@@ -20,6 +23,7 @@ import org.openntf.xsp.nosql.communication.driver.proton.DatabaseSupplier;
 import org.openntf.xsp.nosql.mapping.extension.ViewQuery;
 
 import com.hcl.domino.db.model.BulkOperationException;
+import com.hcl.domino.db.model.ComputeOptions;
 import com.hcl.domino.db.model.Database;
 import com.hcl.domino.db.model.Document;
 import com.hcl.domino.db.model.OptionalCount;
@@ -37,9 +41,11 @@ import jakarta.nosql.mapping.Sorts;
 public class ProtonDocumentCollectionManager extends AbstractDominoDocumentCollectionManager {
 	
 	private final DatabaseSupplier supplier;
+	private final ProtonEntityConverter entityConverter;
 	
 	public ProtonDocumentCollectionManager(DatabaseSupplier supplier) {
 		this.supplier = supplier;
+		this.entityConverter = new ProtonEntityConverter();
 	}
 
 	@Override
@@ -66,20 +72,47 @@ public class ProtonDocumentCollectionManager extends AbstractDominoDocumentColle
 
 	@Override
 	public DocumentEntity insert(DocumentEntity entity, boolean computeWithForm) {
-		// TODO Auto-generated method stub
-		return null;
+		ClassMapping mapping = getClassMapping(entity.getName());
+		Database database = supplier.get();
+		try {
+			Document doc = entityConverter.convertNoSQLEntity(entity, true, mapping);
+			doc = database.createDocument(doc, new ComputeOptions(computeWithForm, true)).get();
+			entity.add(jakarta.nosql.document.Document.of(DominoConstants.FIELD_ID, doc.getUnid()));
+			return entity;
+		} catch (Exception e) {
+			throw new RuntimeException(e);
+		}
 	}
 
 	@Override
 	public DocumentEntity update(DocumentEntity entity, boolean computeWithForm) {
-		// TODO Auto-generated method stub
-		return null;
+		Optional<jakarta.nosql.document.Document> maybeId = entity.find(DominoConstants.FIELD_ID);
+		if(maybeId.isPresent()) {
+			// Then consider it an insert
+			return insert(entity, computeWithForm);
+		} else {
+			ClassMapping mapping = getClassMapping(entity.getName());
+			Database database = supplier.get();
+			try {
+				Document doc = entityConverter.convertNoSQLEntity(entity, true, mapping);
+				DQLTerm dql = DQL.item("@Text(@DocumentUniqueID)").isEqualTo(maybeId.get().get(String.class)); //$NON-NLS-1$
+				doc = database.upsertDocument(dql.toString(), doc, new ComputeOptions(computeWithForm, true)).get();
+				return entity;
+			} catch (Exception e) {
+				throw new RuntimeException(e);
+			}
+		}
 	}
 
 	@Override
 	public boolean existsById(String unid) {
-		// TODO Auto-generated method stub
-		return false;
+		Database database = supplier.get();
+		try {
+			Document doc = database.readDocumentByUnid(unid, Collections.emptyList()).get();
+			return doc != null;
+		} catch (Exception e) {
+			throw new RuntimeException(e);
+		}
 	}
 
 	@Override
@@ -89,14 +122,25 @@ public class ProtonDocumentCollectionManager extends AbstractDominoDocumentColle
 
 	@Override
 	public Optional<DocumentEntity> getById(String entityName, String id) {
-		// TODO Auto-generated method stub
-		return Optional.empty();
+		ClassMapping mapping = getClassMapping(entityName);
+		Database database = supplier.get();
+		try {
+			List<String> itemNames = getItemNames(mapping);
+			
+			Document doc = database.readDocumentByUnid(id, itemNames).get();
+			
+			return entityConverter.convertDocuments(entityName, Arrays.asList(doc), mapping)
+				.findFirst();
+		} catch (Exception e) {
+			throw new RuntimeException(e);
+		}
 	}
 
 	@Override
 	public Iterable<DocumentEntity> insert(Iterable<DocumentEntity> entities) {
-		// TODO Auto-generated method stub
-		return null;
+		return StreamSupport.stream(entities.spliterator(), false)
+			.map(entity -> insert(entity, false))
+			.collect(Collectors.toList());
 	}
 
 	@Override
@@ -138,18 +182,7 @@ public class ProtonDocumentCollectionManager extends AbstractDominoDocumentColle
 		
 		Database database = supplier.get();
 		try {
-			List<String> itemNames = mapping.getFields()
-				.stream()
-				.map(f -> f.getNativeField())
-				.map(f -> {
-					Column col = f.getAnnotation(Column.class);
-					if(col == null) {
-						return null;
-					}
-					return col.value().isEmpty() ? f.getName() : col.value();
-				})
-				.filter(Objects::nonNull)
-				.collect(Collectors.toList());
+			List<String> itemNames = getItemNames(mapping);
 			OptionalItemNames itemNamesArg = new OptionalItemNames(itemNames);
 			OptionalStart startArg = new OptionalStart((int)skip);
 			OptionalCount countArg = new OptionalCount(limit < 1 ? Integer.MAX_VALUE : (int)limit);
@@ -161,31 +194,21 @@ public class ProtonDocumentCollectionManager extends AbstractDominoDocumentColle
 				countArg
 			).get();
 			
-			return docs.stream()
-				.map(doc -> {
-					String id = doc.getUnid();
-					
-					List<jakarta.nosql.document.Document> resultDocs = new ArrayList<>();
-					resultDocs.add(jakarta.nosql.document.Document.of(DominoConstants.FIELD_ID, id));
-					
-					doc.getItems().forEach(item -> {
-						List<?> val = item.getValue();
-						Object value = val == null || val.isEmpty() ? null : val.size() == 1 ? val.get(0) : val;
-						resultDocs.add(jakarta.nosql.document.Document.of(item.getName(), value));
-					});
-					
-					return DocumentEntity.of(entityName, resultDocs);
-				});
+			return entityConverter.convertDocuments(entityName, docs, mapping);
 		} catch (Exception e) {
-			e.printStackTrace();
 			throw new RuntimeException(e);
 		}
 	}
 
 	@Override
 	public long count(String documentCollection) {
-		// TODO Auto-generated method stub
-		return 0;
+		DQLTerm dql = DQL.item(DominoConstants.FIELD_NAME).isEqualTo(documentCollection);
+		Database database = supplier.get();
+		try {
+			return database.readDocuments(dql.toString()).get().size();
+		} catch (Exception e) {
+			throw new RuntimeException(e);
+		}
 	}
 
 	@Override
@@ -193,4 +216,18 @@ public class ProtonDocumentCollectionManager extends AbstractDominoDocumentColle
 		
 	}
 
+	private List<String> getItemNames(ClassMapping mapping) {
+		return mapping.getFields()
+			.stream()
+			.map(f -> f.getNativeField())
+			.map(f -> {
+				Column col = f.getAnnotation(Column.class);
+				if(col == null) {
+					return null;
+				}
+				return col.value().isEmpty() ? f.getName() : col.value();
+			})
+			.filter(Objects::nonNull)
+			.collect(Collectors.toList());
+	}
 }

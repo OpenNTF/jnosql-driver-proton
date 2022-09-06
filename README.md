@@ -1,6 +1,6 @@
 # Jakarta NoSQL Driver For Domino Via Proton
 
-This repository contains a Jakarta NoSQL driver that connects to a Domino server via Proton (the AppDev Pack). This driver targets Jakarta EE 9 and assumes that your application includes CDI 3.0 or above and Bean Validation 3.0 or above. This driver builds on the core driver components developed in the [XPages Jakarta EE Support project](https://github.com/OpenNTF/org.openntf.xsp.jakartaee/).
+This repository contains a Jakarta NoSQL driver that connects to a Domino server via Proton (the AppDev Pack). This driver targets Jakarta EE 9 and assumes that your application includes at least CDI 3.0, Bean Validation 3.0, and JSON-B 2.0. This driver builds on the core driver components developed in the [XPages Jakarta EE Support project](https://github.com/OpenNTF/org.openntf.xsp.jakartaee/).
 
 ## Implementation Notes
 
@@ -14,6 +14,13 @@ Because Proton does not expose a number of Domino APIs and concepts, this driver
 - DominoDocumentCollectionManager#getByNoteId is unavailable
 - Folder add/remove methods are not available
 - Transaction support is not available
+- DominoDocumentCollectionManager#count is unreliable due to document-count restrictions in queries
+- MIME is not supported
+- The `protected` and `signed` item flags are not supported
+- For time types, only LocalDate, LocalTime, and ZonedDateTime are supported
+- Arrays of mixed time types (e.g. LocalDate and ZonedDateTime) are not supported
+
+Beyond inherent limitations, rich text is also not currently supported
 
 #### Jakarta NoSQL Dependencies
 
