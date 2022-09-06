@@ -13,6 +13,7 @@ Because Proton does not expose a number of Domino APIs and concepts, this driver
 - Entities returned by `@ViewDocuments` may not be in view order
 - DominoDocumentCollectionManager#getByNoteId is unavailable
 - Folder add/remove methods are not available
+- Transaction support is not available
 
 #### Jakarta NoSQL Dependencies
 
