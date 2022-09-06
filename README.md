@@ -2,9 +2,32 @@
 
 This repository contains a Jakarta NoSQL driver that connects to a Domino server via Proton (the AppDev Pack). This driver targets Jakarta EE 9 and assumes that your application includes at least CDI 3.0, Bean Validation 3.0, and JSON-B 2.0. This driver builds on the core driver components developed in the [XPages Jakarta EE Support project](https://github.com/OpenNTF/org.openntf.xsp.jakartaee/).
 
+## Usage
+
+This driver can be retrieved from OpenNTF's Maven repository:
+
+```xml
+<repositories>
+	<repository>
+		<id>openntf</id>
+		<url>https://artifactory.openntf.org/openntf</url>
+	</repository>
+</repositories>
+
+<dependencies>
+	<dependency>
+		<groupId>org.openntf.jakarta</groupId>
+		<artifactId>jnosql-driver-proton</artifactId>
+		<version>1.0.0-SNAPSHOT</version>
+	</dependency>
+</dependencies>
+```
+
 ## Implementation Notes
 
-#### Limitations
+Currently, this driver does not support rich text or Act-As-User operations.
+
+#### Upstream Limitations
 
 Because Proton does not expose a number of Domino APIs and concepts, this driver is limited compared to the LSXBE driver. Specifically:
 
@@ -19,8 +42,6 @@ Because Proton does not expose a number of Domino APIs and concepts, this driver
 - The `protected` and `signed` item flags are not supported
 - For time types, only LocalDate, LocalTime, and ZonedDateTime are supported
 - Arrays of mixed time types (e.g. LocalDate and ZonedDateTime) are not supported
-
-Beyond inherent limitations, rich text is also not currently supported
 
 #### Jakarta NoSQL Dependencies
 
