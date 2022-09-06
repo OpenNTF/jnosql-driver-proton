@@ -1,9 +1,12 @@
 package org.openntf.xsp.nosql.communication.driver.proton.impl;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
+import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -11,10 +14,12 @@ import org.eclipse.jnosql.mapping.reflection.ClassMapping;
 import org.openntf.xsp.nosql.communication.driver.DominoConstants;
 import org.openntf.xsp.nosql.communication.driver.impl.AbstractDominoDocumentCollectionManager;
 import org.openntf.xsp.nosql.communication.driver.impl.QueryConverter;
+import org.openntf.xsp.nosql.communication.driver.impl.DQL.DQLTerm;
 import org.openntf.xsp.nosql.communication.driver.impl.QueryConverter.QueryConverterResult;
 import org.openntf.xsp.nosql.communication.driver.proton.DatabaseSupplier;
 import org.openntf.xsp.nosql.mapping.extension.ViewQuery;
 
+import com.hcl.domino.db.model.BulkOperationException;
 import com.hcl.domino.db.model.Database;
 import com.hcl.domino.db.model.Document;
 import com.hcl.domino.db.model.OptionalCount;
@@ -96,8 +101,24 @@ public class ProtonDocumentCollectionManager extends AbstractDominoDocumentColle
 
 	@Override
 	public void delete(DocumentDeleteQuery query) {
-		// TODO Auto-generated method stub
-		
+		try {
+			Database database = supplier.get();
+			Collection<String> unids = query.getDocuments();
+			if(unids != null) {
+				unids = unids.stream()
+					.filter(unid -> unid != null && !unid.isEmpty())
+					.collect(Collectors.toSet());
+			}
+			if(unids != null && !unids.isEmpty()) {
+				database.deleteDocumentsByUnid((Set<String>)unids).get();
+			} else if(query.getCondition().isPresent()) {
+				// Then do it via DQL
+				DQLTerm dql = QueryConverter.getCondition(query.getCondition().get());
+				database.deleteDocuments(dql.toString()).get();
+			}
+		} catch (BulkOperationException | InterruptedException | ExecutionException e) {
+			throw new RuntimeException(e);
+		}
 	}
 
 	@Override
@@ -109,6 +130,10 @@ public class ProtonDocumentCollectionManager extends AbstractDominoDocumentColle
 		
 		long skip = queryResult.getSkip();
 		long limit = queryResult.getLimit();
+		
+		// Sorting is not available in queries, and this is left as a reminder
+		//   if intentionally ignoring them
+		@SuppressWarnings("unused")
 		List<Sort> sorts = query.getSorts();
 		
 		Database database = supplier.get();
