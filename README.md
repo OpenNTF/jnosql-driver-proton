@@ -44,7 +44,7 @@ public class ContextDatabaseSupplier {
 
 ## Implementation Notes
 
-Currently, this driver does not support rich text.
+Currently, this driver does not support rich text or any view-based operations.
 
 #### Upstream Limitations
 
@@ -52,7 +52,7 @@ Because Proton does not expose a number of Domino APIs and concepts, this driver
 
 - Sorting is not available when querying
 - Views entries are not available
-- Entities returned by `@ViewDocuments` may not be in view order
+- Entities returned by `@ViewDocuments` (when implemented) may not be in view order
 - DominoDocumentCollectionManager#getByNoteId is unavailable
 - Folder add/remove methods are not available
 - Transaction support is not available
