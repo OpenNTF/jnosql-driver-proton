@@ -44,7 +44,7 @@ public class ContextDatabaseSupplier {
 
 ## Implementation Notes
 
-Currently, this driver does not support rich text or any view-based operations.
+Currently, this driver does not support rich text, any view-based operations, or attachments.
 
 #### Upstream Limitations
 
