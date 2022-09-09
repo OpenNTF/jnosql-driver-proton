@@ -108,7 +108,7 @@ public class ProtonDocumentCollectionManager extends AbstractDominoDocumentColle
 	@Override
 	public DocumentEntity update(DocumentEntity entity, boolean computeWithForm) {
 		Optional<jakarta.nosql.document.Document> maybeId = entity.find(DominoConstants.FIELD_ID);
-		if(maybeId.isPresent()) {
+		if(!maybeId.isPresent()) {
 			// Then consider it an insert
 			return insert(entity, computeWithForm);
 		} else {
