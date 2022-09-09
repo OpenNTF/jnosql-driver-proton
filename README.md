@@ -31,8 +31,10 @@ public class ContextDatabaseSupplier {
 	
 	@Produces
 	public DatabaseSupplier get() {
-		HttpServletRequest request = CDI.current().select(HttpServletRequest.class).get();
-		return () -> (Database)request.getAttribute("keySetByServletRequestListener");
+		return () -> {
+			HttpServletRequest request = CDI.current().select(HttpServletRequest.class).get();
+			return (Database)request.getAttribute("keySetByServletRequestListener");
+		};
 	}
 	
 	@Produces
